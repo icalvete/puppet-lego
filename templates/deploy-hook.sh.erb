@@ -1,0 +1,100 @@
+#!/bin/bash
+# Gestionado por Puppet — lego::cert[<%= @name %>]. No editar a mano.
+#
+# Lo ejecuta LEGO tras crear o renovar el certificado con exito, no Puppet.
+# Por eso la recarga del servicio es un comando de aqui dentro y no un recurso
+# de Puppet: cuando esto corre, Puppet no esta.
+#
+# lego exporta estas variables al hook:
+#   LEGO_CERT_PATH        el certificado con su cadena
+#   LEGO_CERT_KEY_PATH    la clave privada
+#   LEGO_CERT_DOMAIN      el nombre principal
+#
+# Si algo falla aqui, se sale con error para que quede en el journal del
+# service y no pase inadvertido: un hook que falla en silencio deja a Apache
+# sirviendo el certificado viejo sin que nadie se entere.
+set -euo pipefail
+
+log() { echo "[deploy-hook <%= @name %>] $*"; }
+
+# Si algo falla a mitad de una copia, set -e aborta el script y dejaria un
+# fichero temporal huerfano; con claves privadas eso es basura sensible
+# acumulandose en /etc/ssl/private. Se limpian siempre al salir.
+TMPFILES=()
+cleanup() {
+  # Se preserva el codigo de salida original: en bash el estado del trap EXIT
+  # se convierte en el del script, asi que si esta funcion terminara en un
+  # comando fallido, un despliegue correcto saldria con error y systemd
+  # marcaria el service como failed en cada renovacion buena.
+  local rc=$?
+  local f
+  for f in "${TMPFILES[@]:-}"; do
+    if [ -n "$f" ] && [ -e "$f" ]; then
+      rm -f "$f" || true
+      log "  limpiado temporal $f"
+    fi
+  done
+  return $rc
+}
+trap cleanup EXIT
+
+: "${LEGO_CERT_PATH:?falta LEGO_CERT_PATH}"
+: "${LEGO_CERT_KEY_PATH:?falta LEGO_CERT_KEY_PATH}"
+
+log "certificado renovado para ${LEGO_CERT_DOMAIN:-<%= @primary %>}"
+
+<% if @deploy_cert && @deploy_key -%>
+# --- Copia a las rutas que ya usan los vhosts ----------------------------
+# Se copia en vez de enlazar para que /etc/ssl/private siga conteniendo
+# ficheros de verdad. La escritura es atomica —fichero temporal y mv— para que
+# Apache nunca lea un certificado a medio escribir si recarga en ese instante.
+
+install_atomic() {
+  local origen="$1" destino="$2" modo="$3"
+  local tmp="${destino}.tmp.$$"
+  TMPFILES+=("$tmp")
+  /usr/bin/install -m "$modo" -o root -g root "$origen" "$tmp"
+  /bin/mv -f "$tmp" "$destino"
+  log "  -> $destino ($modo)"
+}
+
+install_atomic "$LEGO_CERT_PATH"     "<%= @deploy_cert %>" 0644
+# 0600 y de root: una clave privada no debe ser legible por otros usuarios de
+# la maquina.
+install_atomic "$LEGO_CERT_KEY_PATH" "<%= @deploy_key %>"  0600
+<% if @deploy_chain -%>
+
+# Solo la cadena del emisor, sin el leaf, para SSLCertificateChainFile.
+ISSUER="${LEGO_CERT_PATH%.crt}.issuer.crt"
+if [ -f "$ISSUER" ]; then
+  install_atomic "$ISSUER" "<%= @deploy_chain %>" 0644
+else
+  log "  AVISO: no encuentro $ISSUER, no toco <%= @deploy_chain %>"
+fi
+<% end -%>
+<% else -%>
+# Sin deploy_cert/deploy_key: el material se queda solo donde lo dejo lego.
+log "  sin rutas de despliegue configuradas"
+<% end -%>
+
+<% if @reload_command -%>
+# --- Recarga del servicio -------------------------------------------------
+# Se comprueba la configuracion antes de recargar cuando se puede: recargar
+# Apache con una configuracion invalida lo deja caido.
+if /usr/sbin/apache2ctl configtest 2>/dev/null; then
+  log "configtest OK, recargando"
+  <%= @reload_command %>
+  log "recargado"
+elif ! command -v /usr/sbin/apache2ctl >/dev/null 2>&1; then
+  log "sin apache2ctl, recargando sin comprobar"
+  <%= @reload_command %>
+  log "recargado"
+else
+  log "ERROR: apache2ctl configtest falla, NO recargo"
+  exit 1
+fi
+<% else -%>
+log "sin comando de recarga configurado"
+<% end -%>
+
+log "hecho"

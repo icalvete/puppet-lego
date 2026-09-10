@@ -1,0 +1,25 @@
+# Gestionado por Puppet — lego::cert[<%= @name %>]. No editar a mano.
+[Unit]
+Description=Pide o renueva el certificado TLS de <%= @primary %> (lego)
+Documentation=https://go-acme.github.io/lego/
+# Sin red no hay nada que hacer, y hace falta el servicio de metadatos de EC2
+# para obtener las credenciales del instance profile.
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+# oneshot: arranca, hace el proceso completo, ejecuta el deploy-hook y termina.
+# NO es un demonio. Arrancarlo a mano es hacer el proceso una vez:
+#   systemctl start <%= @unit %>.service
+#   journalctl -fu <%= @unit %>.service
+Type=oneshot
+EnvironmentFile=<%= @env_file %>
+ExecStart=<%= scope.lookupvar('lego::install_dir') %>/lego run
+# El proceso escribe claves privadas: umask restrictivo por si acaso.
+UMask=0077
+# Un reto DNS-01 espera propagacion; con el sleep aleatorio que lego mete
+# antes de renovar, hay que dar margen.
+TimeoutStartSec=15min
+
+[Install]
+WantedBy=multi-user.target

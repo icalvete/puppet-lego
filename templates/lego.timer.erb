@@ -1,0 +1,18 @@
+# Gestionado por Puppet — lego::cert[<%= @name %>]. No editar a mano.
+[Unit]
+Description=Comprueba cada <%= @check_interval %> si toca renovar <%= @primary %>
+
+[Timer]
+# Cada cuanto se COMPRUEBA, no cada cuanto se renueva: lego solo actua cuando
+# al certificado le queda poca vida, asi que la mayoria de ejecuciones no
+# hacen nada y salen enseguida.
+OnUnitActiveSec=<%= @check_interval %>
+# Para que la primera comprobacion no dependa de cuando arranco la maquina.
+OnBootSec=15min
+# Que 8 hosts no golpeen la CA en el mismo instante.
+RandomizedDelaySec=1h
+Persistent=true
+Unit=<%= @unit %>.service
+
+[Install]
+WantedBy=timers.target
