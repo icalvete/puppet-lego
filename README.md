@@ -199,4 +199,9 @@ when permission problems show up.
 
 ## License
 
-Apache-2.0
+MIT — see [LICENSE](LICENSE).
+
+The `lego` binary shipped in `files/` is redistributed unmodified and is also
+MIT licensed; its copyright notice is kept alongside it in
+[`files/LICENSE.lego`](files/LICENSE.lego) and inside the tarball itself.
+Copyright (c) 2017-2024 Ludovic Fernandez, (c) 2015-2017 Sebastian Erhart.
