@@ -62,9 +62,19 @@ a role there. lego supports this natively.
   assume_role_arn => 'arn:aws:iam::123456789012:role/acme-dns01',
 ```
 
-The role in the zone's account needs `route53:ChangeResourceRecordSets` on that
-zone and `route53:GetChange` on `*`. The write can be narrowed so that a
-compromised host can only touch the challenge records and nothing else:
+The role in the zone's account needs three actions:
+
+| Action | Resource | |
+|---|---|---|
+| `route53:ChangeResourceRecordSets` | the zone | writing the challenge record |
+| `route53:ListResourceRecordSets` | the zone | lego reads existing records before writing |
+| `route53:GetChange` | `*` | waiting for the change to propagate |
+
+Only the write can be narrowed. `ListResourceRecordSets` is read-only but cannot
+be restricted to the challenge names: Route 53's condition keys
+(`...RecordTypes`, `...Actions`, `...NormalizedRecordNames`) apply to
+`ChangeResourceRecordSets` only. A host can therefore read the whole zone, but
+modify nothing outside `_acme-challenge.*`:
 
 ```json
 {
@@ -84,7 +94,8 @@ compromised host can only touch the challenge records and nothing else:
 ```
 
 `route53:ListHostedZones` is **not** required as long as `hosted_zone_id` is
-set: lego only needs it to auto-detect the zone from the domain name.
+set: lego only needs it to auto-detect the zone from the domain name. Note that
+this is a different action from `ListResourceRecordSets`, which **is** required.
 
 ## How it works
 
