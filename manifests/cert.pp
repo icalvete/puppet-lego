@@ -27,6 +27,17 @@
 #   $deploy_chain     Opcional: ruta donde dejar solo la cadena del emisor
 #   $reload_command   Que ejecutar despues. Ej: 'systemctl reload apache2'
 #
+# === Nombre de las unidades
+#   $unit_name        Prefijo de la unidad, el temporizador, el fichero de
+#                     entorno y el hook. Por defecto 'lego', para que el
+#                     servicio se llame igual en toda la flota y cualquier
+#                     runbook valga en cualquier maquina.
+#
+#                     Un host solo necesita un certificado si este cubre todos
+#                     sus nombres. Si aun asi declaras dos lego::cert en el
+#                     mismo host, Puppet fallara al compilar por recurso
+#                     duplicado: ponle unit_name al segundo.
+#
 # Apuntando deploy_cert y deploy_key a las rutas que ya usa la configuracion del
 # servidor web, migrar un host desde un certificado repartido por otros medios no
 # obliga a tocar ningun vhost: basta cambiar de clase.
@@ -46,6 +57,7 @@ define lego::cert (
   $check_interval  = $lego::params::check_interval,
   $enable_timer    = $lego::params::enable_timer,
   $aws_region      = 'eu-west-1',
+  $unit_name       = $lego::params::unit_name,
 ) {
 
   include lego
@@ -65,9 +77,9 @@ define lego::cert (
   }
 
   $primary   = $domains[0]
-  $env_file  = "${lego::conf_dir}/${name}.env"
-  $hook_file = "${lego::hook_dir}/lego-deploy-${name}"
-  $unit      = "lego-${name}"
+  $unit      = $unit_name
+  $env_file  = "${lego::conf_dir}/${unit_name}.env"
+  $hook_file = "${lego::hook_dir}/${unit_name}-deploy"
 
   # El fichero de entorno lleva TODA la configuracion: cada opcion de lego
   # tiene su variable LEGO_*, asi que la unidad no necesita argumentos.

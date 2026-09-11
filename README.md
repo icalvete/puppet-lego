@@ -88,19 +88,28 @@ set: lego only needs it to auto-detect the zone from the domain name.
 
 ## How it works
 
-Two systemd units per certificate:
+Two systemd units:
 
 ```
-lego-<name>.service    oneshot: runs, does the whole thing, exits. Not a daemon.
-lego-<name>.timer      the clock: starts that service periodically
+lego.service    oneshot: runs, does the whole thing, exits. Not a daemon.
+lego.timer      the clock: starts that service periodically
 ```
+
+The units are called `lego` on every host rather than being named after the
+resource title, so a runbook, a monitoring check or a `systemctl status` works
+the same everywhere. The unit description still names the certificate, so
+`systemctl status lego` tells you which one it is.
+
+A host normally needs a single certificate, covering all the names it serves.
+If you do declare two `lego::cert` on one host, Puppet fails at compile time
+with a duplicate resource — set `unit_name` on the second one.
 
 Starting the service by hand *is* doing the whole process once, which makes the
 first issuance easy to supervise:
 
 ```bash
-systemctl start lego-www.service
-journalctl -fu lego-www.service
+systemctl start lego.service
+journalctl -fu lego.service
 ```
 
 In lego 5.x a single `run` command both obtains and renews, so there is no
@@ -186,6 +195,7 @@ version changes.
 | `check_interval` | `12h` | How often it **checks**, not how often it renews |
 | `enable_timer` | `false` | `false` leaves the timer installed and stopped, so nothing is requested until someone starts it |
 | `aws_region` | `eu-west-1` | |
+| `unit_name` | `lego` | Prefix for the unit, timer, environment file and hook. Only change it if a host needs a second certificate |
 
 ## Notes
 

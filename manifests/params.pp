@@ -31,6 +31,11 @@ class lego::params {
   # diga cuando. Mejor que fijar un numero a mano.
   $renew_days = 0
 
+  # Prefijo de las unidades de systemd. Se deja fijo y no derivado del titulo
+  # del recurso para que el servicio se llame igual en todas las maquinas: un
+  # nombre distinto por host obliga a saber cual antes de poder operarlo.
+  $unit_name = 'lego'
+
   # false → Puppet deja el timer parado. La primera emision se lanza a mano,
   # mirando el journal, que es cuando se descubren los errores de permisos.
   $enable_timer = false
