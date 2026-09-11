@@ -202,13 +202,30 @@ version changes.
 | `deploy_cert` / `deploy_key` | `undef` | Where the hook copies the material. Both or neither |
 | `deploy_chain` | `undef` | Optional path for the issuer chain alone |
 | `reload_command` | `undef` | Run after a successful deployment. The configuration check that precedes it is Apache/Debian-specific — see *Reloading the service* |
-| `server` | `letsencrypt-staging` | `letsencrypt` for production. Staging issues untrusted certificates with far higher rate limits: use it until the configuration is proven |
+| `server` | `letsencrypt-staging` | `letsencrypt` for production. Staging issues untrusted certificates with far higher rate limits: use it until the configuration is proven. Each server gets its own storage directory — see *Staging and production* |
 | `key_type` | `RSA2048` | lego's own default is `EC256`; this module is explicit so the algorithm never changes by accident |
 | `renew_days` | `0` | `0` lets lego decide, using a third of the remaining lifetime and the ARI endpoint (RFC 9773) |
 | `check_interval` | `12h` | How often it **checks**, not how often it renews |
 | `enable_timer` | `false` | `false` leaves the timer installed and stopped, so nothing is requested until someone starts it |
 | `aws_region` | `eu-west-1` | |
 | `unit_name` | `lego` | Prefix for the unit, timer, environment file and hook. Only change it if a host needs a second certificate |
+
+## Staging and production
+
+Certificates and accounts are stored under `${data_dir}/<server>`, one directory
+per ACME server, so `letsencrypt-staging` and `letsencrypt` never share storage.
+
+This is not cosmetic. lego decides whether to reissue by looking at the expiry
+date of the certificate it finds on disk, **not at who issued it**. With a single
+shared directory, switching `server` from staging to production finds a
+perfectly valid staging certificate with months left, logs `Skip renewal`, and
+never requests a real one — so the host keeps serving an untrusted certificate
+while everything looks successful. (The renewal-info endpoint also starts
+warning, because production does not recognise the staging issuer.)
+
+With the directories separated, switching servers finds an empty directory and
+issues for real, and the staging material stays around instead of having to be
+deleted.
 
 ## Notes
 

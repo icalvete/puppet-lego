@@ -33,9 +33,9 @@ class lego::install {
   }
 
   if $lego::manage_data_dir {
-    # 0700: aqui viven la clave de la cuenta ACME y las claves privadas de los
-    # certificados. Solo root.
-    file { [$data_dir, "${data_dir}/certificates", "${data_dir}/accounts"]:
+    # 0700. Los subdirectorios por servidor ACME los crea lego::cert, y dentro
+    # de cada uno lego crea accounts/ y certificates/ por su cuenta.
+    file { $data_dir:
       ensure  => directory,
       owner   => 'root',
       group   => 'root',

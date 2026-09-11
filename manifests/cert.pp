@@ -78,19 +78,39 @@ define lego::cert (
 
   $primary   = $domains[0]
   $unit      = $unit_name
+
+  # Almacen separado por servidor ACME. lego ya separa las CUENTAS por servidor,
+  # pero no los certificados: con un almacen unico, cambiar de staging a
+  # produccion no reemite nada, porque lego solo mira la fecha de caducidad del
+  # certificado que encuentra, no quien lo emitio. Diria "Skip renewal" y
+  # seguirias sirviendo un certificado de pruebas.
+  #
+  # Separandolos, cambiar de servidor deja el directorio nuevo vacio y lego pide
+  # uno de verdad. Y el material de staging se conserva en vez de borrarse.
+  $server_dir = regsubst($server, '[^A-Za-z0-9._-]', '-', 'G')
+  $lego_path  = "${lego::data_dir}/${server_dir}"
   $env_file  = "${lego::conf_dir}/${unit_name}.env"
   $hook_file = "${lego::hook_dir}/${unit_name}-deploy"
 
   # El fichero de entorno lleva TODA la configuracion: cada opcion de lego
   # tiene su variable LEGO_*, asi que la unidad no necesita argumentos.
   # 0600 porque nombra el rol y la zona.
+  # 0700: aqui viven la clave de la cuenta ACME y las claves privadas.
+  file { $lego_path:
+    ensure  => directory,
+    owner   => 'root',
+    group   => 'root',
+    mode    => '0700',
+    require => Class['lego::install'],
+  }
+
   file { $env_file:
     ensure  => present,
     content => template("${module_name}/cert.env.erb"),
     owner   => 'root',
     group   => 'root',
     mode    => '0600',
-    require => Class['lego::install'],
+    require => File[$lego_path],
     notify  => Exec['lego-systemd-daemon-reload'],
   }
 
