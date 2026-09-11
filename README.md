@@ -129,7 +129,9 @@ variable, so the whole configuration lives in one environment file and the unit
 takes no arguments.
 
 The **deploy hook** is executed by lego after a successful issuance or renewal,
-not by Puppet. It copies the material to `deploy_cert` and `deploy_key` — the
+not by Puppet. lego renamed the variables it exports to hooks in 5.x
+(`LEGO_HOOK_CERT_PATH` and friends, previously `LEGO_CERT_PATH`); the hook
+accepts both spellings, so it does not depend on which version is installed. It copies the material to `deploy_cert` and `deploy_key` — the
 key as `0600`, owned by root — writing atomically via a temporary file so the
 web server can never read a half-written certificate. It then runs
 `reload_command`. If anything fails, the hook exits non-zero, cleans up its

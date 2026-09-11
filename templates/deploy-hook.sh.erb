@@ -5,10 +5,10 @@
 # Por eso la recarga del servicio es un comando de aqui dentro y no un recurso
 # de Puppet: cuando esto corre, Puppet no esta.
 #
-# lego exporta estas variables al hook:
-#   LEGO_CERT_PATH        el certificado con su cadena
-#   LEGO_CERT_KEY_PATH    la clave privada
-#   LEGO_CERT_DOMAIN      el nombre principal
+# lego exporta las rutas del material al hook. Los nombres cambiaron en la v5:
+#   v5:  LEGO_HOOK_CERT_PATH  LEGO_HOOK_CERT_KEY_PATH  LEGO_HOOK_ISSUER_CERT_PATH
+#   v4:  LEGO_CERT_PATH       LEGO_CERT_KEY_PATH
+# Se aceptan los dos para que el hook no dependa de la version instalada.
 #
 # Si algo falla aqui, se sale con error para que quede en el journal del
 # service y no pase inadvertido: un hook que falla en silencio deja a Apache
@@ -38,10 +38,19 @@ cleanup() {
 }
 trap cleanup EXIT
 
-: "${LEGO_CERT_PATH:?falta LEGO_CERT_PATH}"
-: "${LEGO_CERT_KEY_PATH:?falta LEGO_CERT_KEY_PATH}"
+CERT_SRC="${LEGO_HOOK_CERT_PATH:-${LEGO_CERT_PATH:-}}"
+KEY_SRC="${LEGO_HOOK_CERT_KEY_PATH:-${LEGO_CERT_KEY_PATH:-}}"
+ISSUER_SRC="${LEGO_HOOK_ISSUER_CERT_PATH:-}"
+DOMAIN="${LEGO_HOOK_CERT_DOMAINS:-${LEGO_CERT_DOMAIN:-<%= @primary %>}}"
 
-log "certificado renovado para ${LEGO_CERT_DOMAIN:-<%= @primary %>}"
+if [ -z "$CERT_SRC" ] || [ -z "$KEY_SRC" ]; then
+  log "ERROR: lego no ha exportado las rutas del certificado."
+  log "       Se buscaron LEGO_HOOK_CERT_PATH / LEGO_HOOK_CERT_KEY_PATH (lego 5.x)"
+  log "       y LEGO_CERT_PATH / LEGO_CERT_KEY_PATH (lego 4.x). Ninguna definida."
+  exit 1
+fi
+
+log "certificado renovado para ${DOMAIN}"
 
 <% if @deploy_cert && @deploy_key -%>
 # --- Copia a las rutas que ya usan los vhosts ----------------------------
@@ -58,14 +67,15 @@ install_atomic() {
   log "  -> $destino ($modo)"
 }
 
-install_atomic "$LEGO_CERT_PATH"     "<%= @deploy_cert %>" 0644
+install_atomic "$CERT_SRC" "<%= @deploy_cert %>" 0644
 # 0600 y de root: una clave privada no debe ser legible por otros usuarios de
 # la maquina.
-install_atomic "$LEGO_CERT_KEY_PATH" "<%= @deploy_key %>"  0600
+install_atomic "$KEY_SRC"  "<%= @deploy_key %>"  0600
 <% if @deploy_chain -%>
 
 # Solo la cadena del emisor, sin el leaf, para SSLCertificateChainFile.
-ISSUER="${LEGO_CERT_PATH%.crt}.issuer.crt"
+# lego 5.x la exporta; en 4.x se deduce del nombre del certificado.
+ISSUER="${ISSUER_SRC:-${CERT_SRC%.crt}.issuer.crt}"
 if [ -f "$ISSUER" ]; then
   install_atomic "$ISSUER" "<%= @deploy_chain %>" 0644
 else
