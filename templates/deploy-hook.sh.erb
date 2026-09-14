@@ -87,24 +87,57 @@ fi
 log "  sin rutas de despliegue configuradas"
 <% end -%>
 
+# --- Recarga del servicio ---------------------------------------------------
 <% if @reload_command -%>
-# --- Recarga del servicio -------------------------------------------------
-# Se comprueba la configuracion antes de recargar cuando se puede: recargar
-# Apache con una configuracion invalida lo deja caido.
-if /usr/sbin/apache2ctl configtest 2>/dev/null; then
-  log "configtest OK, recargando"
-  <%= @reload_command %>
-  log "recargado"
-elif ! command -v /usr/sbin/apache2ctl >/dev/null 2>&1; then
-  log "sin apache2ctl, recargando sin comprobar"
+# reload_command declarado: manda lo explicito, sin detectar nada.
+<% if @config_test_command -%>
+if <%= @config_test_command %> >/dev/null 2>&1; then
+  log "configuracion valida, recargando"
   <%= @reload_command %>
   log "recargado"
 else
-  log "ERROR: apache2ctl configtest falla, NO recargo"
+  log "ERROR: '<%= @config_test_command %>' falla, NO recargo"
   exit 1
 fi
 <% else -%>
-log "sin comando de recarga configurado"
+log "recargando (sin comprobacion de configuracion)"
+<%= @reload_command %>
+log "recargado"
+<% end -%>
+<% else -%>
+# Sin reload_command: se detecta que servidores web estan ACTIVOS y se recarga
+# cada uno con su propia comprobacion. Recargar con una configuracion rota tira
+# el servicio, asi que si la comprobacion falla no se recarga nada y se sale con
+# error: el certificado anterior sigue sirviendose y el fallo se ve en el journal.
+recargados=0
+fallos=0
+
+recargar_si_activo() {
+  local unidad="$1" comprobar="$2" recargar="$3"
+  systemctl is-active --quiet "$unidad" 2>/dev/null || return 0
+  if eval "$comprobar" >/dev/null 2>&1; then
+    log "$unidad: configuracion valida, recargando"
+    eval "$recargar"
+    recargados=$((recargados + 1))
+    log "  $unidad recargado"
+  else
+    log "ERROR: la comprobacion de $unidad falla ($comprobar), NO lo recargo"
+    fallos=$((fallos + 1))
+  fi
+}
+
+recargar_si_activo nginx    "nginx -t"                      "systemctl reload nginx"
+recargar_si_activo apache2  "/usr/sbin/apache2ctl configtest" "systemctl reload apache2"
+recargar_si_activo httpd    "httpd -t"                      "systemctl reload httpd"
+
+if [ "$fallos" -gt 0 ]; then
+  exit 1
+fi
+if [ "$recargados" -eq 0 ]; then
+  log "AVISO: ningun servidor web activo detectado (nginx, apache2, httpd)."
+  log "       El certificado esta desplegado pero nadie lo ha recargado."
+  log "       Si el servicio no es ninguno de esos, declara reload_command."
+fi
 <% end -%>
 
 log "hecho"

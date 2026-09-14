@@ -30,10 +30,9 @@ Certificate Transparency logs.
 - AWS credentials reachable by the host. An EC2 instance profile is enough; no
   credentials are written to disk.
 
-> **Tested on Debian-family Linux only** (developed against Ubuntu 22.04).
-> Nothing in the module is deliberately distribution-specific except the
-> configuration check described in *Reloading the service*, but no other family
-> has been tried. Patches welcome.
+> **Tested on Debian-family Linux only** (Ubuntu 20.04, 22.04 and 24.04).
+> Reload detection knows about `nginx`, `apache2` and `httpd`; anything else
+> needs `reload_command`. No other family has been tried. Patches welcome.
 
 ## Usage
 
@@ -141,23 +140,31 @@ served and the failure is visible in the journal.
 ### Reloading the service
 
 Reloading a web server with a broken configuration takes it down, so the hook
-verifies the configuration before reloading. **That check is hardcoded to
-`/usr/sbin/apache2ctl configtest`**, which is Apache as packaged by Debian and
-Ubuntu:
+always verifies before reloading.
 
-| Situation | Behaviour |
-|---|---|
-| `apache2ctl configtest` passes | reloads |
-| `apache2ctl` is not installed | reloads **without checking** |
-| `apache2ctl configtest` fails | does not reload, exits non-zero |
+**By default it detects what is running.** For each of `nginx`, `apache2` and
+`httpd` that systemd reports as active, it runs that server's own check and
+reloads it only if the check passes:
 
-So on any other web server, or on a distribution that names the binary
-differently — `httpd -t` on RHEL family, for instance — the check silently does
-not happen and `reload_command` runs unverified. It still works, and a broken
-reload will surface as a failed unit, but you lose the safety net.
+| Server | Check | Reload |
+|---|---|---|
+| nginx | `nginx -t` | `systemctl reload nginx` |
+| apache2 | `apache2ctl configtest` | `systemctl reload apache2` |
+| httpd | `httpd -t` | `systemctl reload httpd` |
 
-Making the check a parameter alongside `reload_command` is the obvious
-improvement and has not been done yet.
+If any check fails, **nothing is reloaded** and the hook exits non-zero: the
+previously deployed certificate keeps being served and the failure shows up as a
+failed unit. If several are active, all of them are reloaded. If none is active
+the hook says so and exits cleanly — the certificate is deployed but nobody was
+told about it.
+
+Set `reload_command` only when the service is something else. Explicit wins over
+detection, and then `config_test_command` is yours to provide:
+
+```puppet
+  reload_command      => 'systemctl reload haproxy',
+  config_test_command => 'haproxy -c -f /etc/haproxy/haproxy.cfg',
+```
 
 ## Vendored binary
 
@@ -201,7 +208,8 @@ version changes.
 | `assume_role_arn` | `undef` | Role to assume when the zone lives in another account |
 | `deploy_cert` / `deploy_key` | `undef` | Where the hook copies the material. Both or neither |
 | `deploy_chain` | `undef` | Optional path for the issuer chain alone |
-| `reload_command` | `undef` | Run after a successful deployment. The configuration check that precedes it is Apache/Debian-specific — see *Reloading the service* |
+| `reload_command` | `undef` | Leave unset to auto-detect the running web server — see *Reloading the service*. Set it only for something else |
+| `config_test_command` | `undef` | Check to run before `reload_command`. Ignored when detection is used, since each server brings its own |
 | `server` | `letsencrypt-staging` | `letsencrypt` for production. Staging issues untrusted certificates with far higher rate limits: use it until the configuration is proven. Each server gets its own storage directory — see *Staging and production* |
 | `key_type` | `RSA2048` | lego's own default is `EC256`; this module is explicit so the algorithm never changes by accident |
 | `renew_days` | `0` | `0` lets lego decide, using a third of the remaining lifetime and the ARI endpoint (RFC 9773) |

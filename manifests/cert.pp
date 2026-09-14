@@ -25,7 +25,13 @@
 #   $deploy_cert      Ruta donde el hook deja el certificado (con su cadena)
 #   $deploy_key       Ruta donde el hook deja la clave privada, en 0600
 #   $deploy_chain     Opcional: ruta donde dejar solo la cadena del emisor
-#   $reload_command   Que ejecutar despues. Ej: 'systemctl reload apache2'
+#   $reload_command   Que ejecutar despues. Si se deja sin definir, el hook
+#                     detecta que servidores web estan ACTIVOS (nginx, apache2,
+#                     httpd) y recarga cada uno tras comprobar su configuracion.
+#                     Declaralo solo si el servicio no es ninguno de esos.
+#   $config_test_command  Comprobacion previa a reload_command. Solo se usa si
+#                     reload_command esta declarado; con la deteccion automatica
+#                     cada servidor trae la suya.
 #
 # === Nombre de las unidades
 #   $unit_name        Prefijo de la unidad, el temporizador, el fichero de
@@ -51,6 +57,7 @@ define lego::cert (
   $deploy_key      = undef,
   $deploy_chain    = undef,
   $reload_command  = undef,
+  $config_test_command = undef,
   $server          = $lego::params::server,
   $key_type        = $lego::params::key_type,
   $renew_days      = $lego::params::renew_days,
