@@ -26,10 +26,28 @@ class lego::install {
   # El unless compara la version instalada, asi que extrae en la primera
   # pasada y cuando se sube una version nueva, y no hace nada el resto del
   # tiempo. Sin depender del modulo archive ni de staging.
+  # --no-same-owner: extrayendo como root, tar conserva por defecto el uid/gid
+  # que venga dentro del tar.gz. El de upstream trae 1001, que en la mayoria de
+  # maquinas no existe. Un binario que systemd ejecuta como root no puede ser
+  # propiedad de un uid arbitrario: el dia que se cree un usuario y le toque ese
+  # numero, hereda la capacidad de reescribirlo.
   exec { 'lego-extract':
-    command => "/bin/tar -xzf ${staged} -C ${install_dir} lego && /bin/chmod 0755 ${binary}",
+    command => "/bin/tar --no-same-owner -xzf ${staged} -C ${install_dir} lego",
     unless  => "/bin/sh -c '${binary} --version 2>/dev/null | /bin/grep -q \"lego version ${version} \"'",
     require => File[$staged],
+  }
+
+  # El propietario y los permisos se fijan aqui y no en el exec porque el exec
+  # no vuelve a ejecutarse cuando la version ya es la correcta: en una maquina
+  # que instalo una version anterior del modulo, el chmod del exec no llegaria
+  # nunca. Sin source ni content, este recurso gestiona solo los metadatos y no
+  # toca el contenido del binario.
+  file { $binary:
+    ensure  => file,
+    owner   => 'root',
+    group   => 'root',
+    mode    => '0755',
+    require => Exec['lego-extract'],
   }
 
   if $lego::manage_data_dir {
