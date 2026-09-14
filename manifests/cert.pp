@@ -32,6 +32,11 @@
 #   $config_test_command  Comprobacion previa a reload_command. Solo se usa si
 #                     reload_command esta declarado; con la deteccion automatica
 #                     cada servidor trae la suya.
+#   $post_deploy_command  Se ejecuta despues de desplegar y recargar. Para todo
+#                     lo que el despliegue estandar no cubre: copiar el material
+#                     a otro servicio con dueno distinto, regenerar un keystore,
+#                     reiniciar algo. Si falla, el hook falla, asi que el fallo
+#                     se ve como una unidad en estado failed.
 #
 # === Nombre de las unidades
 #   $unit_name        Prefijo de la unidad, el temporizador, el fichero de
@@ -58,6 +63,7 @@ define lego::cert (
   $deploy_chain    = undef,
   $reload_command  = undef,
   $config_test_command = undef,
+  $post_deploy_command = undef,
   $server          = $lego::params::server,
   $key_type        = $lego::params::key_type,
   $renew_days      = $lego::params::renew_days,

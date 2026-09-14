@@ -166,6 +166,21 @@ detection, and then `config_test_command` is yours to provide:
   config_test_command => 'haproxy -c -f /etc/haproxy/haproxy.cfg',
 ```
 
+### Doing more than copying files
+
+Some services want the material somewhere else, owned by someone else, or need
+more than a reload. `post_deploy_command` runs after the deployment and the
+reload, and if it fails the hook fails, so the problem shows up as a failed unit
+instead of passing silently.
+
+```puppet
+  post_deploy_command => 'install -o sensu -g sensu -m 0600 /etc/ssl/private/example.key /etc/sensu/ssl/key.pem && systemctl restart sensu-backend',
+```
+
+It runs inside the hook, which uses `set -euo pipefail`: a command referencing
+an unset variable aborts the whole hook rather than just failing. For anything
+beyond a couple of commands, point it at a script.
+
 ## Vendored binary
 
 The tarball ships in `files/`, and `lego::install` extracts it. The distribution
@@ -210,6 +225,7 @@ version changes.
 | `deploy_chain` | `undef` | Optional path for the issuer chain alone |
 | `reload_command` | `undef` | Leave unset to auto-detect the running web server — see *Reloading the service*. Set it only for something else |
 | `config_test_command` | `undef` | Check to run before `reload_command`. Ignored when detection is used, since each server brings its own |
+| `post_deploy_command` | `undef` | Run after deploying and reloading — see *Doing more than copying files* |
 | `server` | `letsencrypt-staging` | `letsencrypt` for production. Staging issues untrusted certificates with far higher rate limits: use it until the configuration is proven. Each server gets its own storage directory — see *Staging and production* |
 | `key_type` | `RSA2048` | lego's own default is `EC256`; this module is explicit so the algorithm never changes by accident |
 | `renew_days` | `0` | `0` lets lego decide, using a third of the remaining lifetime and the ARI endpoint (RFC 9773) |

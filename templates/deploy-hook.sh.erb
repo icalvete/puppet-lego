@@ -140,4 +140,18 @@ if [ "$recargados" -eq 0 ]; then
 fi
 <% end -%>
 
+<% if @post_deploy_command -%>
+# --- Post-despliegue ---------------------------------------------------------
+# Todo lo que el despliegue estandar no cubre: otro servicio con dueno distinto,
+# un keystore que regenerar, algo que reiniciar. Si falla, se sale con error.
+# El comando NO se imprime: si lleva comillas rompe el literal y con el el script.
+log "ejecutando el post-despliegue"
+if <%= @post_deploy_command %>; then
+  log "  post-despliegue OK"
+else
+  log "  ERROR: el post-despliegue ha fallado"
+  exit 1
+fi
+<% end -%>
+
 log "hecho"
