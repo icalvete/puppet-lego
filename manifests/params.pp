@@ -26,10 +26,20 @@ class lego::params {
   # Cada cuanto se COMPRUEBA si toca renovar (no cada cuanto se renueva).
   $check_interval = '12h'
 
-  # Con 0, lego decide solo: 1/3 de la vida restante del certificado, o la
-  # mitad si es de vida corta. Y usa ARI (RFC9773) para que la propia CA le
-  # diga cuando. Mejor que fijar un numero a mano.
-  $renew_days = 0
+  # 30 dias de margen sobre una vida de 90.
+  #
+  # NO se deja en 0 aunque la ayuda de lego diga que 0 significa "calcula
+  # dinamicamente: 1/3 de la vida restante". Comprobado contra lego 5.4.1 sobre
+  # un certificado real con 86 dias por delante:
+  #
+  #   LEGO_RENEW_DAYS=0    -> "renewal can be performed in 86d22h"  = AL CADUCAR
+  #   LEGO_RENEW_DAYS=30   -> "renewal can be performed in 56d22h"  = 30d antes
+  #
+  # Con ARI activado y desactivado sale igual, asi que no es cosa de ARI: el 0
+  # se aplica literalmente y la ventana de renovacion se abre en el instante de
+  # la caducidad. Con el timer comprobando cada 12h, eso son hasta 12 horas
+  # sirviendo un certificado caducado, y cero margen si la renovacion falla.
+  $renew_days = 30
 
   # Prefijo de las unidades de systemd. Se deja fijo y no derivado del titulo
   # del recurso para que el servicio se llame igual en todas las maquinas: un
